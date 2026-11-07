@@ -128,7 +128,7 @@ window/stretch/shrink=1.5
 
 [editor_plugins]
 
-enabled=PoolStringArray( "gut" )
+enabled=PoolStringArray( "petz_texture", "gut" )
 
 [global]
 

@@ -461,7 +461,7 @@ func _update_reference_image_bg() -> void:
 			bg.texture = null
 		
 		var image: Image = Image.new()
-		var err: int = image.load(current_path, false, false)
+		var err: int = preload("res://scripts/petz_image.gd").load_image(image, current_path, false, false)
 		if err == OK:
 			var texture: ImageTexture = ImageTexture.new()
 			texture.create_from_image(image)

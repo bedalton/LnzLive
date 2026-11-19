@@ -1242,6 +1242,9 @@ margin_left = 336.0
 margin_top = 2.0
 margin_right = 336.0
 margin_bottom = 22.0
+mouse_filter = 1
+size_flags_horizontal = 3
+clip_text = true
 custom_fonts/font = ExtResource( 27 )
 script = ExtResource( 8 )
 

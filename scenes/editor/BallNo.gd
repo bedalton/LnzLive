@@ -68,6 +68,7 @@ func _update_ball_label(ball_no: int) -> void:
 				ball_label.add_color_override("font_color", Color.white)
 			
 			ball_label.text = display_text
+			ball_label.hint_tooltip = display_text
 			ball_label.visible = true
 			return
 
@@ -90,4 +91,5 @@ func _update_ball_label(ball_no: int) -> void:
 			name_ext = ": " + str(b_name)
 	
 	ball_label.text = "Curr Ball #" + str(ball_no) + " " + type_label + name_ext
+	ball_label.hint_tooltip = ball_label.text
 	ball_label.visible = true

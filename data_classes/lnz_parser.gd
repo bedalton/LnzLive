@@ -12,6 +12,7 @@ class VariationBlock:
 	var section: String
 	var start_line: int
 	var lines: Array = []
+	var source_lines: Array = []
 	var base_id: int = 0
 	var subblock_key = null
 	var is_linked: bool = false
@@ -91,12 +92,12 @@ var z_shade_slope: int = 100
 var file_path: String
 
 func _init(file_path: String) -> void:
-	if file_path == null:
-		return
-	
-	self.file_path = file_path
 	r.compile("[-.\\d]+")
 	str_r.compile("[\\S]+")
+	if file_path.empty():
+		return
+
+	self.file_path = file_path
 	
 	var file: File = File.new()
 	if file.file_exists(file_path):
@@ -105,11 +106,15 @@ func _init(file_path: String) -> void:
 		print("File not found: " + file_path)
 		return
 
-	_scan_file(file)
+	_scan_lines(file)
 	_finalize_sections()
 	file.close()
 
-func _scan_file(file: File) -> void:
+func scan_text(source: String) -> void:
+	_scan_lines(VirtualFileLineReader.new(Array(source.split("\n"))))
+	_finalize_sections()
+
+func _scan_lines(reader) -> void:
 	sections_map = {}
 	var current_section: String = "Header"
 	var current_var_id: int = 0
@@ -122,8 +127,8 @@ func _scan_file(file: File) -> void:
 
 	_ensure_block(current_section, 0, 0)
 
-	while !file.eof_reached():
-		var line: String = file.get_line()
+	while not reader.eof_reached():
+		var line: String = reader.get_line()
 		var line_stripped: String = line.strip_edges()
 
 		if line_stripped.begins_with("["):
@@ -150,9 +155,9 @@ func _scan_file(file: File) -> void:
 				current_var_id = parsed_id
 				current_subblock_key = new_subblock_key
 			else:
-				_append_line(current_section, current_var_id, line, current_subblock_key)
+				_append_line(current_section, current_var_id, line, line_number, current_subblock_key)
 		else:
-			_append_line(current_section, current_var_id, line, current_subblock_key)
+			_append_line(current_section, current_var_id, line, line_number, current_subblock_key)
 
 		line_number += 1
 
@@ -223,24 +228,18 @@ func _ensure_subblock(section: String, parsed_id: int, suffix: String, custom_na
 	block_dict[subblock_key] = block
 	return subblock_key
 
-func _append_line(section: String, id: int, line: String, subblock_key = 0):
-	if sections_map.has(section):
-		var section_data = sections_map[section]
-		if typeof(section_data) != TYPE_DICTIONARY:
-			return
-		if section_data.has(id):
-			var block_or_dict = section_data[id]
-			if typeof(block_or_dict) == TYPE_DICTIONARY:
-				if block_or_dict.has(subblock_key):
-					block_or_dict[subblock_key].lines.append(line)
-				else:
-					var new_block = VariationBlock.new(id, "Variation " + str(id), section, 0)
-					new_block.base_id = id
-					new_block.subblock_key = subblock_key
-					block_or_dict[subblock_key] = new_block
-					block_or_dict[subblock_key].lines.append(line)
-			else:
-				block_or_dict.lines.append(line)
+func _append_line(section: String, id: int, line: String, line_number: int, subblock_key):
+	var block = sections_map.get(section, {}).get(id)
+	if typeof(block) == TYPE_DICTIONARY:
+		if not block.has(subblock_key):
+			var new_block = VariationBlock.new(id, "Variation " + str(id), section, 0)
+			new_block.base_id = id
+			new_block.subblock_key = subblock_key
+			block[subblock_key] = new_block
+		block = block[subblock_key]
+	if block != null:
+		block.lines.append(line)
+		block.source_lines.append(line_number)
 
 func get_next_section(file: File, section_name: String) -> bool:
 	file.seek(0)
@@ -256,13 +255,26 @@ func set_excluded_subblocks(p_data: Dictionary) -> void:
 
 func compile_section(section_name: String, active_config) -> VirtualFileLineReader:
 	var compiled_lines: Array = []
+	for block in _compile_section_blocks(section_name, active_config):
+		compiled_lines.append_array(block.lines)
+	return VirtualFileLineReader.new(compiled_lines)
+
+func compile_source_lines(section_name: String, active_config) -> Array:
+	var source_lines: Array = []
+	for block in _compile_section_blocks(section_name, active_config):
+		for line in block.source_lines:
+			source_lines.append(line)
+	return source_lines
+
+func _compile_section_blocks(section_name: String, active_config) -> Array:
+	var blocks: Array = []
 
 	if not sections_map.has(section_name):
-		return VirtualFileLineReader.new(compiled_lines)
+		return blocks
 
 	var section_dict = sections_map[section_name]
 	if typeof(section_dict) != TYPE_DICTIONARY:
-		return VirtualFileLineReader.new(compiled_lines)
+		return blocks
 
 	if section_dict.has(0):
 		var base_block = section_dict[0]
@@ -270,9 +282,9 @@ func compile_section(section_name: String, active_config) -> VirtualFileLineRead
 			for key in base_block:
 				var subblock = base_block[key]
 				if typeof(subblock) == TYPE_OBJECT:
-					compiled_lines.append_array(subblock.lines)
+					blocks.append(subblock)
 		elif typeof(base_block) == TYPE_OBJECT:
-			compiled_lines.append_array(base_block.lines)
+			blocks.append(base_block)
 
 	if typeof(active_config) == TYPE_DICTIONARY:
 		# active_config is {subblock_key: id_or_suffix_string}
@@ -295,25 +307,25 @@ func compile_section(section_name: String, active_config) -> VirtualFileLineRead
 
 			var block_or_dict = section_dict[parsed_id]
 			if typeof(block_or_dict) == TYPE_OBJECT:
-				compiled_lines.append_array(block_or_dict.lines)
+				blocks.append(block_or_dict)
 			elif typeof(block_or_dict) == TYPE_DICTIONARY:
 				# Check direct key match (int subblock index)
 				if block_or_dict.has(subblock_key):
 					var sub = block_or_dict[subblock_key]
 					if typeof(sub) == TYPE_OBJECT:
-						compiled_lines.append_array(sub.lines)
+						blocks.append(sub)
 				# Check suffix match (string key)
 				elif parsed_suffix != "" and block_or_dict.has(parsed_suffix):
 					var sub = block_or_dict[parsed_suffix]
 					if typeof(sub) == TYPE_OBJECT:
-						compiled_lines.append_array(sub.lines)
+						blocks.append(sub)
 				# Fallback to key 0
 				elif block_or_dict.has(0):
 					var sub = block_or_dict[0]
 					if typeof(sub) == TYPE_OBJECT:
-						compiled_lines.append_array(sub.lines)
+						blocks.append(sub)
 
-		return VirtualFileLineReader.new(compiled_lines)
+		return blocks
 
 	var active_ids: Array = active_config if typeof(active_config) == TYPE_ARRAY else [0]
 	var active_int_ids: Array = []
@@ -340,7 +352,7 @@ func compile_section(section_name: String, active_config) -> VirtualFileLineRead
 		var block_or_dict = section_dict[id]
 
 		if typeof(block_or_dict) == TYPE_OBJECT:
-			compiled_lines.append_array(block_or_dict.lines)
+			blocks.append(block_or_dict)
 			continue
 
 		if typeof(block_or_dict) != TYPE_DICTIONARY:
@@ -349,9 +361,9 @@ func compile_section(section_name: String, active_config) -> VirtualFileLineRead
 		for key in block_or_dict:
 			var sub = block_or_dict[key]
 			if typeof(sub) == TYPE_OBJECT:
-				compiled_lines.append_array(sub.lines)
+				blocks.append(sub)
 
-	return VirtualFileLineReader.new(compiled_lines)
+	return blocks
 
 func get_parsed_lines(reader: VirtualFileLineReader, keys: Array) -> Array:
 	var return_array: Array = []

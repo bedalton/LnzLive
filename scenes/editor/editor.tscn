@@ -1,4 +1,4 @@
-[gd_scene load_steps=59 format=2]
+[gd_scene load_steps=60 format=2]
 
 [ext_resource path="res://scenes/editor/LnzTextEdit.gd" type="Script" id=1]
 [ext_resource path="res://scenes/editor/FileTree.gd" type="Script" id=2]
@@ -44,6 +44,8 @@
 [ext_resource path="res://scenes/editor/ReferenceImagePopup.tscn" type="PackedScene" id=45]
 [ext_resource path="res://scenes/editor/MenuBar.gd" type="Script" id=46]
 [ext_resource path="res://resources/icons/ico_arr_sync.png" type="Texture" id=47]
+
+[ext_resource path="res://scenes/editor/LnzFilterPanel.gd" type="Script" id=61]
 
 [sub_resource type="CubeMesh" id=1]
 
@@ -1211,6 +1213,16 @@ custom_styles/normal = SubResource( 7 )
 custom_fonts/font = ExtResource( 27 )
 text = "Find/Replace"
 
+[node name="FilterButton" type="Button" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/HBoxContainer"]
+hint_tooltip = "Filter LNZ lines by ball, palette index, or texture"
+custom_styles/hover = SubResource( 6 )
+custom_styles/pressed = SubResource( 6 )
+custom_styles/focus = SubResource( 7 )
+custom_styles/disabled = SubResource( 7 )
+custom_styles/normal = SubResource( 7 )
+custom_fonts/font = ExtResource( 27 )
+text = "Filter"
+
 [node name="TextModeButton" type="Button" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/HBoxContainer"]
 visible = false
 margin_left = 336.0
@@ -1363,6 +1375,71 @@ custom_styles/pressed = SubResource( 13 )
 custom_styles/normal = SubResource( 14 )
 custom_fonts/font = ExtResource( 27 )
 text = "Close"
+
+[node name="FilterPanel" type="PanelContainer" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer"]
+visible = false
+script = ExtResource( 61 )
+
+[node name="Controls" type="VBoxContainer" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel"]
+
+
+[node name="Balls" type="LineEdit" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls"]
+custom_fonts/font = ExtResource( 27 )
+placeholder_text = "Ball IDs"
+
+[node name="Palette" type="LineEdit" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls"]
+custom_fonts/font = ExtResource( 27 )
+placeholder_text = "Palette indices"
+
+[node name="Texture" type="HBoxContainer" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls"]
+
+
+[node name="Tokens" type="LineEdit" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls/Texture"]
+size_flags_horizontal = 3
+custom_fonts/font = ExtResource( 27 )
+placeholder_text = "Texture tokens"
+
+[node name="Slots" type="OptionButton" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls/Texture"]
+custom_styles/hover = SubResource( 13 )
+custom_styles/pressed = SubResource( 13 )
+custom_styles/normal = SubResource( 14 )
+custom_fonts/font = ExtResource( 27 )
+text = "Texture slots"
+
+[node name="Actions" type="HBoxContainer" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls"]
+
+
+[node name="Apply" type="Button" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls/Actions"]
+custom_styles/hover = SubResource( 13 )
+custom_styles/pressed = SubResource( 13 )
+custom_styles/normal = SubResource( 14 )
+custom_fonts/font = ExtResource( 27 )
+text = "Apply"
+
+[node name="Selection" type="Button" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls/Actions"]
+custom_styles/hover = SubResource( 13 )
+custom_styles/pressed = SubResource( 13 )
+custom_styles/normal = SubResource( 14 )
+custom_fonts/font = ExtResource( 27 )
+text = "Use selected balls"
+
+[node name="Clear" type="Button" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls/Actions"]
+custom_styles/hover = SubResource( 13 )
+custom_styles/pressed = SubResource( 13 )
+custom_styles/normal = SubResource( 14 )
+custom_fonts/font = ExtResource( 27 )
+text = "Clear"
+
+[node name="Close" type="Button" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls/Actions"]
+custom_styles/hover = SubResource( 13 )
+custom_styles/pressed = SubResource( 13 )
+custom_styles/normal = SubResource( 14 )
+custom_fonts/font = ExtResource( 27 )
+text = "Close"
+
+[node name="Status" type="Label" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls"]
+clip_text = true
+custom_fonts/font = ExtResource( 27 )
 
 [node name="LnzTextEdit" type="TextEdit" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer"]
 margin_top = 28.0

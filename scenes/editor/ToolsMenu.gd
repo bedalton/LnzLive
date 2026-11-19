@@ -46,7 +46,8 @@ enum ToolsAction {
 	APPLY_FUZZ = 12,
 	COPY_COLORS = 13,
 	BALL_INFO = 14,
-	CLEAR_PAINTBALLZ = 15
+	CLEAR_PAINTBALLZ = 15,
+	FILTER_BALL = 16
 }
 
 var dog_generator: Node = null
@@ -327,12 +328,18 @@ func _on_ToolsMenu_index_pressed(index: int) -> void:
 			if is_ball_selected:
 				var lnz_text_edit: Node = get_tree().root.get_node("Root/SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/LnzTextEdit")
 				if is_instance_valid(lnz_text_edit):
+					lnz_text_edit.filter_panel.clear()
 					lnz_text_edit.select_ball(0, ball_no, is_addball, -1)
 			return
 
 		ToolsAction.CLEAR_PAINTBALLZ: # Clear Paintballz
 			if is_ball_selected:
 				emit_signal("clear_ball_paintballz", ball_no)
+
+		ToolsAction.FILTER_BALL:
+			if is_ball_selected:
+				var lnz_text_edit = get_tree().root.get_node("Root/SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/LnzTextEdit")
+				lnz_text_edit.filter_panel.filter_ball(ball_no)
 
 
 func _on_ToolsMenu_about_to_show() -> void:
@@ -500,6 +507,9 @@ func _on_ToolsMenu_about_to_show() -> void:
 
 		add_separator()
 		add_item("Exit " + active_mode)
+	if is_ball_selected:
+		add_item("Filter by #%d" % ball_no, ToolsAction.FILTER_BALL)
+
 
 func _on_RecolorPopup_confirmed() -> void:
 	var popup = get_parent().get_node("RecolorPopup/VBoxContainer")

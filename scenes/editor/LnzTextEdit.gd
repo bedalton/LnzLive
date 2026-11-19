@@ -47,6 +47,9 @@ onready var console_log = pet_view.find_node("ConsoleLog", true, false)
 onready var apply_changes_button = pet_view.find_node("ApplyChangesButton", true, false)
 
 onready var find_panel = get_node("../FindPanel")
+onready var filter_panel = get_node("../FilterPanel")
+
+const MENU_FILTERED_PASTE = 104
 
 var is_user_file = false
 var filepath: String
@@ -121,6 +124,9 @@ func _safe_connect(target, sig, method):
 
 func _ready():
 	_setup_context_menu()
+	get_menu().connect("about_to_show", self, "_update_filter_context_menu")
+	connect("text_changed", filter_panel, "queue_refresh", [true])
+	pet_node.connect("palette_changed", self, "_on_filter_model_updated")
 
 	_split_regex.compile("[\\s,]+")
 
@@ -260,6 +266,8 @@ func _load_file(filepath: String, user_flag: bool):
 	if contents.strip_edges().empty() and self.text.strip_edges().empty():
 		return
 
+	if filepath != self.filepath:
+		filter_panel.clear()
 	self.filepath = filepath
 	is_user_file = user_flag
 
@@ -563,6 +571,7 @@ func _find_nearest_snapshot(from_index: int) -> int:
 
 func _restore_snapshot(item):
 	self.text = item.full_text
+	filter_panel.queue_refresh()
 	cursor_set_line(item.cursor_line)
 	cursor_set_column(item.cursor_col)
 	set_v_scroll(item.v_scroll)
@@ -648,8 +657,7 @@ func _unhandled_key_input(event):
 	):
 		redo_visual_edit()
 	elif event.scancode == KEY_F:
-		find_panel.visible = not find_panel.visible
-		self.readonly = find_panel.visible
+		_on_FindReplaceButton_pressed()
 		if find_panel.visible:
 			var search_input = find_panel.get_node("VBoxContainer/LineEdit")
 			if search_input:
@@ -659,7 +667,75 @@ func _unhandled_key_input(event):
 		return
 	get_tree().set_input_as_handled()
 
+func _input(event):
+	if not filter_panel.active or not has_focus() or not event is InputEventKey or not event.pressed:
+		return
+	var key = event.scancode
+	var shortcut = LnzLiveUtils.shortcut_modifier(event)
+	if OS.get_name() == "OSX" and event.control and not event.command:
+		if key == KEY_H:
+			key = KEY_BACKSPACE
+		elif key == KEY_D:
+			key = KEY_DELETE
+	var clipboard_paste = (shortcut and key == KEY_V and not event.shift and not event.alt) or (
+		event.shift and key == KEY_INSERT and not shortcut and not event.alt
+	)
+	var cut_shortcut = (shortcut and key == KEY_X) or (event.shift and key == KEY_DELETE)
+	var multiple_lines = _selection_spans_lines()
+	var blocked = clipboard_paste or (shortcut and key == KEY_A)
+	# Modified Enter can insert above the current line, inside a hidden gap.
+	blocked = blocked or (shortcut and event.shift and key in [KEY_ENTER, KEY_KP_ENTER])
+	if multiple_lines:
+		blocked = blocked or key in [KEY_BACKSPACE, KEY_DELETE, KEY_TAB, KEY_ENTER, KEY_KP_ENTER]
+		blocked = blocked or (shortcut and key in [KEY_C, KEY_X, KEY_INSERT])
+		blocked = blocked or (event.unicode >= 32 and not shortcut and not event.alt)
+	elif not is_selection_active():
+		blocked = blocked or cut_shortcut
+		blocked = blocked or (key == KEY_BACKSPACE and cursor_get_column() == 0)
+		blocked = blocked or (key == KEY_DELETE and cursor_get_column() == get_line(cursor_get_line()).length())
+	if blocked:
+		get_tree().set_input_as_handled()
+		if clipboard_paste:
+			_paste_filtered_line()
+
+func _selection_spans_lines() -> bool:
+	return is_selection_active() and get_selection_from_line() != get_selection_to_line()
+
+func _paste_filtered_line():
+	var clipboard = OS.clipboard
+	if readonly or _selection_spans_lines() or "\n" in clipboard or "\r" in clipboard or clipboard.empty():
+		return
+	if is_selection_active():
+		paste()
+	else:
+		insert_text_at_cursor(clipboard)
+
+func _update_filter_context_menu():
+	var menu = get_menu()
+	var multiple_lines = filter_panel.active and _selection_spans_lines()
+	for id in [MENU_CUT, MENU_COPY, MENU_CLEAR, MENU_SELECT_ALL, 101, 102, 103]:
+		var index = menu.get_item_index(id)
+		if index != -1:
+			var whole_document = id in [MENU_CLEAR, MENU_SELECT_ALL]
+			var whole_line_cut = id == MENU_CUT and not is_selection_active()
+			menu.set_item_disabled(index, multiple_lines or (filter_panel.active and (whole_document or whole_line_cut)))
+	var paste_index = menu.get_item_index(MENU_FILTERED_PASTE)
+	if paste_index == -1:
+		paste_index = menu.get_item_index(MENU_PASTE)
+	if paste_index != -1:
+		menu.set_item_id(paste_index, MENU_FILTERED_PASTE if filter_panel.active else MENU_PASTE)
+		menu.set_item_disabled(paste_index, multiple_lines or (filter_panel.active and ("\n" in OS.clipboard or "\r" in OS.clipboard)))
+
+func _on_filter_model_updated(_palette):
+	filter_panel.queue_refresh()
+
 func _on_LnzTextEdit_gui_input(event):
+	if filter_panel.active and event is InputEventMouseButton and event.pressed:
+		if event.button_index == BUTTON_MIDDLE:
+			accept_event()
+			return
+		if event.button_index == BUTTON_LEFT:
+			filter_panel.call_deferred("capture_expansion")
 	if event is InputEventKey and event.pressed:
 		if event.scancode == KEY_PAGEDOWN:
 			var next = _get_next_section_line_idx(cursor_get_line() + 1)
@@ -740,6 +816,7 @@ func _update_section_bookmarks():
 			bookmarks.append(i)
 
 func _on_cursor_changed():
+	filter_panel.caret_changed()
 	var ball_no = get_current_ball_index()
 	emit_signal("ball_number_changed", ball_no)
 
@@ -756,6 +833,9 @@ func _on_AutowrapButton_pressed():
 	update() # Force a redraw just in case
 
 func _on_FindReplaceButton_pressed():
+	if not find_panel.visible:
+		filter_panel.clear()
+		filter_panel.hide()
 	find_panel.visible = not find_panel.visible
 	self.readonly = find_panel.visible
 	_setup_context_menu()
@@ -802,6 +882,7 @@ func _set_text_preserve(new_text: String):
 	var old_l = cursor_get_line()
 	var old_c = cursor_get_column()
 	text = new_text
+	filter_panel.queue_refresh()
 	set_v_scroll(old_v)
 	set_h_scroll(old_h)
 	cursor_set_line(old_l)
@@ -809,9 +890,14 @@ func _set_text_preserve(new_text: String):
 	_update_section_bookmarks()
 
 func _on_menu_id_pressed(id):
+	if id == MENU_FILTERED_PASTE:
+		_paste_filtered_line()
+		return
+	if filter_panel.active and _selection_spans_lines() and id in [101, 102, 103]:
+		return
 	if id == 100: # Find/Replace
-		find_panel.show()
-		self.readonly = true
+		if not find_panel.visible:
+			_on_FindReplaceButton_pressed()
 	elif id == 101: # Toggle Comment
 		_toggle_comment()
 	elif id == 102: # Set Delimiter
@@ -2992,6 +3078,8 @@ func select_ball(section, ball_no, is_addball, max_addball_no):
 		else:
 			return
 		
+	if filter_panel.active and is_line_hidden(actual_start_point):
+		return
 	cursor_set_line(actual_start_point)
 	cursor_set_column(0)
 	center_viewport_to_cursor()

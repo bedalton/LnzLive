@@ -14,8 +14,19 @@ func _ready() -> void:
 	log_message("Welcome to LnzLive...")
 
 func log_message(msg: String) -> void:
+	_add_message(msg, false)
+
+func log_warning(msg: String) -> void:
+	for i in range(current_messages.size() - 1, -1, -1):
+		if current_messages[i]["warning"]:
+			current_messages.remove(i)
+			break
+	_add_message(msg, true)
+
+func _add_message(msg: String, warning: bool) -> void:
 	var entry: Dictionary = {
 		"text": msg,
+		"warning": warning,
 		"alpha": 1.0,
 		"timer": display_time
 	}
@@ -52,9 +63,17 @@ func _process(delta: float) -> void:
 
 func _update_display() -> void:
 	clear()
+	# Keep warnings visible when status messages fill the log.
 	for msg in current_messages:
-		var display_color: Color = Color(1.0, 1.0, 1.0, msg["alpha"])
-		
-		push_color(display_color)
-		append_bbcode(msg["text"] + "\n")
-		pop()
+		if msg["warning"]:
+			_append_message(msg, Color(1.0, 0.75, 0.35))
+			break
+	for msg in current_messages:
+		if not msg["warning"]:
+			_append_message(msg, Color.white)
+
+func _append_message(msg: Dictionary, color: Color) -> void:
+	color.a = msg["alpha"]
+	push_color(color)
+	append_bbcode(msg["text"] + "\n")
+	pop()

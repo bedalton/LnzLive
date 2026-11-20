@@ -45,6 +45,7 @@ onready var ball_label: Label = get_tree().root.find_node("BallLabel", true, fal
 onready var help_popup: WindowDialog = get_tree().root.find_node("HelpPopupDialog", true, false)
 onready var recolor_popup: ConfirmationDialog = get_tree().root.find_node("RecolorPopup", true, false)
 onready var helper_label: Label = find_node("HelperLabel")
+onready var console_log: RichTextLabel = find_node("ConsoleLog")
 onready var cube: Spatial = get_tree().root.get_node("Root/PetRoot/MeshInstance") as Spatial
 onready var tex: ViewportContainer = get_tree().root.get_node("Root/SceneRoot/ViewportContainer") as ViewportContainer
 
@@ -3540,6 +3541,13 @@ func _finalize_freeline(end_position = null) -> void:
 	# 	_perf_orphans
 	# ])
 
+func _show_paint_color_warning(field: String, value: String) -> void:
+	var message: String = "Enter a palette index for %s, such as 1." % field
+	if not value.strip_edges().empty():
+		message = "Invalid %s. Enter palette indices such as 1,2,5-10." % field
+	print("[WARNING] Paintball Mode: " + message)
+	console_log.log_warning(message)
+
 func _create_paintball_at_position(screen_pos: Vector2, target_ball: Spatial, diameter_override: float = -1):
 	# var _perf_start_time: int = OS.get_ticks_msec()
 	# var _perf_dyn_start: int = OS.get_dynamic_memory_usage()
@@ -3673,12 +3681,12 @@ func _create_paintball_at_position(screen_pos: Vector2, target_ball: Spatial, di
 
 		var color_list: Array = LnzLiveUtils.parse_number_list(props.color)
 		if color_list.empty():
-			print("[ERROR] PetViewContainer: invalid color list format for paintball")
+			_show_paint_color_warning("Color", props.color)
 			return null
 
 		var outline_color_list: Array = LnzLiveUtils.parse_number_list(props.outline_color, true)
 		if outline_color_list.empty():
-			print("[ERROR] PetViewContainer: invalid outline color list format for paintball")
+			_show_paint_color_warning("Outline Color", props.outline_color)
 			return null
 
 		var texture_list: Array = LnzLiveUtils.parse_number_list(props.texture, true)

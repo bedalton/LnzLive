@@ -4,12 +4,14 @@ const LineFilter = preload("res://data_classes/lnz_line_filter.gd")
 
 onready var editor: TextEdit = get_node("../LnzTextEdit")
 onready var fields = [$Controls/Balls, $Controls/Palette, $Controls/Texture/Tokens]
+onready var inherited_values: CheckBox = $Controls/InheritedValues
 onready var slots: OptionButton = $Controls/Texture/Slots
 onready var status: Label = $Controls/Status
 
 var active: bool = false
 var _filter = LineFilter.new()
 var _criteria: Array = [[], [], []]
+var _include_inherited: bool = false
 var _matches: Dictionary = {}
 var _expanded: Dictionary = {}
 var _hidden: Dictionary = {}
@@ -67,6 +69,7 @@ func _apply(_submitted_text: String = ""):
 			editor.set_drag_and_drop_selection_enabled(false)
 	active = true
 	_criteria = criteria
+	_include_inherited = inherited_values.pressed
 	_expanded.clear()
 	_pinned_line = -1
 	editor.deselect()
@@ -88,6 +91,7 @@ func clear():
 	_pending_edit_line = -1
 	for field in fields:
 		field.clear()
+	inherited_values.pressed = false
 	status.text = ""
 
 func filter_ball(ball_no: int):
@@ -163,7 +167,7 @@ func _refresh(pin_edit: bool = false):
 		_expanded.clear()
 		_hidden.clear()
 	_line_count = editor.get_line_count()
-	_matches = _filter.matching_lines(_criteria[0], _criteria[1], _criteria[2])
+	_matches = _filter.matching_lines(_criteria[0], _criteria[1], _criteria[2], _include_inherited)
 	var caret = editor.cursor_get_line()
 	if pin_edit and not _matches.has(caret):
 		_pinned_line = caret

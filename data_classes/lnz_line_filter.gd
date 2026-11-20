@@ -85,9 +85,12 @@ func scan(source: String, variation_config: Dictionary):
 			section_rows.append({"line": line, "parts": parts})
 		rows[section] = section_rows
 
-func matching_lines(ball_ranges: Array, palette_ranges: Array, texture_ranges: Array) -> Dictionary:
+func matching_lines(ball_ranges: Array, palette_ranges: Array, texture_ranges: Array, include_inherited: bool = false) -> Dictionary:
 	var base_count = rows.get("Ballz Info", []).size()
 	var attached = _attached_ball_ids(ball_ranges, base_count)
+	var appearance: Dictionary = {}
+	if include_inherited and (not palette_ranges.empty() or not texture_ranges.empty()):
+		appearance = _ball_appearance(base_count)
 	var matches: Dictionary = {}
 	for section in rows:
 		var section_rows = rows[section]
@@ -102,16 +105,72 @@ func matching_lines(ball_ranges: Array, palette_ranges: Array, texture_ranges: A
 				)
 				if not ball_match and not _matches_columns(parts, BALL_COLUMNS.get(section, []), ball_ranges, attached):
 					continue
-			if not palette_ranges.empty() and not _matches_columns(parts, PALETTE_COLUMNS.get(section, []), palette_ranges):
-				continue
+			var inherited: Array = []
+			if not appearance.empty():
+				inherited = _inherited_appearance(section, index, parts, base_count, appearance)
+			if not palette_ranges.empty():
+				var palette_match = _matches_columns(parts, PALETTE_COLUMNS.get(section, []), palette_ranges)
+				if not inherited.empty():
+					palette_match = palette_match or _in_ranges(inherited[0], palette_ranges) or _in_ranges(inherited[1], palette_ranges)
+				if not palette_match:
+					continue
 			if not texture_ranges.empty():
 				var texture_match = _in_ranges(index, texture_ranges) if section == "Texture List" else (
 					_matches_columns(parts, TEXTURE_COLUMNS.get(section, []), texture_ranges)
 				)
-				if not texture_match:
+				if not texture_match and (inherited.empty() or not _in_ranges(inherited[2], texture_ranges)):
 					continue
 			matches[row.line] = true
 	return matches
+
+# Appearance used by references in the current compiled variation.
+func _ball_appearance(base_count: int) -> Dictionary:
+	var appearance: Dictionary = {}
+	for section in ["Ballz Info", "Add Ball"]:
+		var offset = 0 if section == "Ballz Info" else base_count
+		var paint = PALETTE_COLUMNS[section]
+		var texture_column = TEXTURE_COLUMNS[section][0]
+		var definitions = rows.get(section, [])
+		for i in range(definitions.size()):
+			var parts = definitions[i].parts
+			appearance[i + offset] = [
+				_int_field(parts, paint[0]), _int_field(parts, paint[1]), _int_field(parts, texture_column)
+			]
+
+	for section in ["Color Info Override", "Outline Color Override"]:
+		for row in rows.get(section, []):
+			var ball = _int_field(row.parts, 0)
+			var color = _int_field(row.parts, 1)
+			if not appearance.has(ball) or row.parts.size() < 2 or not row.parts[1].is_valid_integer():
+				continue
+			if section == "Outline Color Override":
+				appearance[ball][1] = color
+			else:
+				appearance[ball][0] = color
+				var slot = _int_field(row.parts, 3, -2)
+				if slot >= -1:
+					appearance[ball][2] = slot
+	return appearance
+
+func _inherited_appearance(section: String, index: int, parts: Array, base_count: int, appearance: Dictionary) -> Array:
+	match section:
+		"Ballz Info":
+			return appearance[index]
+		"Add Ball":
+			return appearance[base_count + index]
+		"Linez":
+			var fill = _int_field(parts, 3, 0) if parts.size() > 3 else -1
+			if fill < 0:
+				# Petz 4 uses -1 for the start ball and other negative values for the end.
+				var endpoint = appearance.get(_int_field(parts, 0 if fill == -1 else 1), [])
+				if not endpoint.empty():
+					return [endpoint[0], -1, endpoint[2]]
+	return []
+
+func _int_field(parts: Array, column: int, fallback: int = -1) -> int:
+	if column < parts.size() and parts[column].is_valid_integer():
+		return int(parts[column])
+	return fallback
 
 func _attached_ball_ids(ball_ranges: Array, base_count: int) -> Dictionary:
 	var attached: Dictionary = {}

@@ -54,3 +54,54 @@ func test_filter_rejects_invalid_criteria_and_bounds_palette_indices():
 	assert_null(filter.parse_ranges("-1"))
 	assert_null(filter.parse_ranges("255-256", 255))
 	assert_eq(filter.parse_ranges("0-2147483647"), [[0, 2147483647]])
+
+func test_inherited_linez_match_the_selected_endpoint():
+	var filter = LineFilter.new()
+	filter.scan(PoolStringArray([
+		"[Ballz Info]",
+		"101 40 -1 0 -1 0 0 1",
+		"102 41 -1 0 -1 0 0 2",
+		"[Add Ball]",
+		"0 0 0 0 103 42 -1 0 0 -1 0 0 0 -1",
+		"[Linez]",
+		"0 1 0 -1 -1 -1 100 100",
+		"0 1 0 -2 -1 -1 100 100",
+		"1 0 0 -1 -1 -1 100 100",
+		"0 1 0 102 -1 -1 100 100",
+		"1 2 0 -2 -1 -1 100 100",
+		"0 9 0 -2 -1 -1 100 100",
+		"0 1"
+	]).join("\n"), {})
+	var palette = filter.parse_ranges("102")
+	var texture = filter.parse_ranges("2")
+	assert_eq(filter.matching_lines([], palette, []).keys(), [2, 9])
+	assert_eq(filter.matching_lines([], [], texture, true).keys(), [2, 7, 8])
+	assert_eq(filter.matching_lines([], palette, texture, true).keys(), [2, 7, 8])
+	assert_eq(filter.matching_lines([], filter.parse_ranges("101"), filter.parse_ranges("1"), true).keys(), [1, 6, 12])
+	assert_eq(filter.matching_lines([], filter.parse_ranges("103"), []).keys(), [4])
+	assert_eq(filter.matching_lines([], filter.parse_ranges("103"), [], true).keys(), [4, 10])
+	assert_eq(filter.matching_lines([], filter.parse_ranges("41"), [], true).keys(), [2])
+
+func test_inherited_values_use_active_ball_overrides():
+	var filter = LineFilter.new()
+	filter.scan(PoolStringArray([
+		"[Ballz Info]",
+		"101 40 -1 0 -1 0 0 1",
+		"[Add Ball]",
+		"0 0 0 0 103 42 -1 0 0 -1 0 0 0 2",
+		"[Linez]",
+		"0 1 0 -2 -1 -1 100 100",
+		"[Color Info Override]",
+		"#1",
+		"1 104 0 3",
+		"#2",
+		"1 105 0 4",
+		"[Outline Color Override]",
+		"1 43"
+	]).join("\n"), {"Color Info Override": {0: 2}})
+	var palette = filter.parse_ranges("105")
+	var texture = filter.parse_ranges("4")
+	assert_eq(filter.matching_lines([], palette, texture).keys(), [10])
+	assert_eq(filter.matching_lines([], palette, texture, true).keys(), [3, 5, 10])
+	assert_eq(filter.matching_lines([], filter.parse_ranges("43"), [], true).keys(), [3, 12])
+	assert_eq(filter.matching_lines([], [], filter.parse_ranges("2"), true).keys(), [3])

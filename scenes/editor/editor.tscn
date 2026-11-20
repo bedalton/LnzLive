@@ -1406,6 +1406,14 @@ custom_styles/normal = SubResource( 14 )
 custom_fonts/font = ExtResource( 27 )
 text = "Texture slots"
 
+[node name="InheritedValues" type="CheckBox" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls"]
+hint_tooltip = "Include ball appearance overrides and colors or textures that Linez inherit from their endpoints."
+custom_styles/hover = SubResource( 13 )
+custom_styles/pressed = SubResource( 13 )
+custom_styles/normal = SubResource( 14 )
+custom_fonts/font = ExtResource( 27 )
+text = "Include inherited values"
+
 [node name="Actions" type="HBoxContainer" parent="SceneRoot/HSplitContainer/HSplitContainer/TextPanelContainer/VBoxContainer/FilterPanel/Controls"]
 
 

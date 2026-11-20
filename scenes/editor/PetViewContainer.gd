@@ -143,6 +143,12 @@ var close_paintball_on_apply: bool = false
 var freeline_active: bool = false
 var freeline_path: Array = []
 var last_freeline_point: Vector2 = Vector2()
+var _live_freeline: bool = false
+var _freeline_preview: Array = []
+var _freeline_samples: Array = []
+var _freeline_ordered_indices: Array = []
+var _freeline_preview_is_straight: bool = false
+var _freeline_preview_end: Vector2 = Vector2.ZERO
 
 var _ordered_color_index: int = 0
 var _ordered_outline_color_index: int = 0
@@ -1420,62 +1426,23 @@ func _handle_paint_mode_gui_input(event: InputEvent) -> bool:
 				return true
 
 	if event is InputEventMouseButton and event.button_index == BUTTON_LEFT:
-		var freeline_mode: bool = (
-			props.freeline
-			or (
-				event.shift
-				and not (
-					event.button_index == BUTTON_WHEEL_UP
-					or event.button_index == BUTTON_WHEEL_DOWN
-				)
-			)
-		)
-		var is_straight_line: bool = (
-			freeline_mode
-			and (
-				props.get("straight_line", false)
-				or Input.is_key_pressed(KEY_ALT)
-				or Input.is_key_pressed(KEY_L)
-			)
-		)
-		if freeline_mode:
-			if event.pressed:
-				print("[STATUS] PetViewContainer: started freeline path")
-				if props.ordered and props.repeat:
-					_ordered_color_index = 0
-					_ordered_outline_color_index = 0
-					_ordered_texture_index = 0
-				freeline_active = true
-				freeline_path.clear()
-				last_freeline_point = event.position
+		if freeline_active and not event.pressed:
+			if _live_freeline:
+				_finish_freeline(event.position, props)
 			else:
-				print("[STATUS] PetViewContainer: finished freeline path")
-				freeline_active = false
-
-				if is_straight_line:
-					var start_pos: Vector2 = freeline_path.front()
-					var end_pos: Vector2 = event.position
-
-					if Input.is_key_pressed(KEY_X):
-						end_pos.y = start_pos.y
-					elif Input.is_key_pressed(KEY_Y):
-						end_pos.x = start_pos.x
-
-					freeline_path.clear()
-					var dist: float = start_pos.distance_to(end_pos)
-					var steps: int = max(1, round(dist / max(1.0, props.spacing)))
-					for i in range(steps + 1):
-						var t: float = float(i) / float(steps)
-						freeline_path.append(start_pos.linear_interpolate(end_pos, t))
-
-				_finalize_freeline(event.position)
+				_finish_deferred_freeline(event.position, props)
+			return true
+		if event.pressed and (props.freeline or event.shift):
+			if _validate_paint_colors(props):
+				_begin_freeline(event.position, props)
 			return true
 
 	if event is InputEventMouseMotion and freeline_active:
-		var current_pos: Vector2 = event.position
-		if current_pos.distance_to(last_freeline_point) > props.spacing:
-			freeline_path.append(current_pos)
-			last_freeline_point = current_pos
+		if _live_freeline:
+			_update_freeline(event.position, props)
+		elif event.position.distance_to(last_freeline_point) > props.spacing:
+			freeline_path.append(event.position)
+			last_freeline_point = event.position
 		return true
 
 	if event is InputEventMouseButton and event.button_index == BUTTON_LEFT and event.pressed:
@@ -2148,6 +2115,7 @@ func _exit_mode(mode: int) -> void:
 			selected_balls.clear()
 			locked_balls.clear()
 		Mode.PAINTBALL:
+			_cancel_freeline()
 			var should_switch_tab = close_paintball_on_apply
 			paintball_target_ball = null
 			close_paintball_on_apply = false
@@ -2256,6 +2224,10 @@ func _sync_mode_cursor() -> void:
 		Mode.PROJECT, Mode.AUTO_PAINTBALLER, Mode.TEXTURE_EDITOR:
 			Input.set_custom_mouse_cursor(hand_neutral, 0, Vector2(30, 31))
 			mouse_default_cursor_shape = CURSOR_ARROW
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_FOCUS_OUT and freeline_active:
+		_cancel_freeline()
 
 func _unhandled_key_input(event: InputEventKey) -> void:
 	if event.is_pressed() and event.scancode == KEY_ESCAPE:
@@ -3407,7 +3379,8 @@ func _on_variation_visibility_changed() -> void:
 # _set_pending_paintballs_visible
 # _on_paintball_mode_for_ball_toggled
 # close_paintball_mode
-# _finalize_freeline
+# _begin_freeline
+# _finish_freeline
 # _create_paintball_at_position
 # _restore_auto_paintballer_selection
 
@@ -3462,6 +3435,144 @@ func _on_paintball_mode_for_ball_toggled(ball: Spatial) -> void:
 func close_paintball_mode() -> void:
 	print("[STATUS] PetViewContainer: closing paintball mode")
 	paintball_check_box.pressed = false
+
+func _begin_freeline(pos: Vector2, props: Dictionary) -> void:
+	_cancel_freeline()
+	freeline_active = true
+	_live_freeline = paintball_settings_instance.is_live_freeline_enabled()
+	_freeline_ordered_indices = [_ordered_color_index, _ordered_outline_color_index, _ordered_texture_index]
+	freeline_path.clear()
+	_reset_freeline_brush(props)
+	if not _live_freeline:
+		last_freeline_point = pos
+		return
+	freeline_path.append(pos)
+	_freeline_preview_is_straight = _freeline_is_straight(props)
+	_freeline_preview_end = pos
+	_draw_freeline_point(pos, props)
+
+func _freeline_is_straight(props: Dictionary) -> bool:
+	return props.get("straight_line", false) or Input.is_key_pressed(KEY_ALT) or Input.is_key_pressed(KEY_L)
+
+func _reset_freeline_brush(props: Dictionary) -> void:
+	_restore_freeline_brush()
+	if props.ordered and props.repeat:
+		_ordered_color_index = 0
+		_ordered_outline_color_index = 0
+		_ordered_texture_index = 0
+
+func _restore_freeline_brush() -> void:
+	_ordered_color_index = _freeline_ordered_indices[0]
+	_ordered_outline_color_index = _freeline_ordered_indices[1]
+	_ordered_texture_index = _freeline_ordered_indices[2]
+
+func _clear_freeline_preview() -> void:
+	for mark in _freeline_preview:
+		if is_instance_valid(mark.node):
+			mark.node.hide()
+			mark.node.queue_free()
+	_freeline_preview.clear()
+
+func _cancel_freeline() -> void:
+	if not freeline_active:
+		return
+	_clear_freeline_preview()
+	_restore_freeline_brush()
+	freeline_active = false
+	freeline_path.clear()
+	_freeline_samples.clear()
+
+func _get_straight_freeline_end(pos: Vector2) -> Vector2:
+	var start: Vector2 = freeline_path.front()
+	if Input.is_key_pressed(KEY_X):
+		pos.y = start.y
+	elif Input.is_key_pressed(KEY_Y):
+		pos.x = start.x
+	return pos
+
+func _get_straight_freeline_points(end: Vector2, spacing: float) -> Array:
+	var start: Vector2 = freeline_path.front()
+	var points: Array = [start]
+	var distance: float = start.distance_to(end)
+	if distance > 0.0:
+		var steps: int = max(1, round(distance / spacing))
+		for i in range(1, steps + 1):
+			points.append(start.linear_interpolate(end, float(i) / steps))
+	return points
+
+func _update_freeline(pos: Vector2, props: Dictionary) -> void:
+	var spacing: float = max(1.0, props.spacing)
+	var straight: bool = _freeline_is_straight(props)
+	var was_straight: bool = _freeline_preview_is_straight
+	_freeline_preview_is_straight = straight
+
+	# Keep the freehand path available when the straight-line modifier is released.
+	var first_new_point: int = freeline_path.size()
+	var start: Vector2 = freeline_path.back()
+	var displacement: Vector2 = pos - start
+	var steps: int = int(displacement.length() / spacing)
+	var step: Vector2 = displacement.normalized() * spacing
+	for i in range(1, steps + 1):
+		freeline_path.append(start + step * i)
+
+	if straight:
+		var end: Vector2 = _get_straight_freeline_end(pos)
+		if was_straight and end == _freeline_preview_end:
+			return
+		_freeline_preview_end = end
+		_clear_freeline_preview()
+		_freeline_samples.clear()
+		_reset_freeline_brush(props)
+		for point in _get_straight_freeline_points(end, spacing):
+			_draw_freeline_point(point, props)
+	else:
+		if was_straight:
+			_clear_freeline_preview()
+			_freeline_samples.clear()
+			_reset_freeline_brush(props)
+			first_new_point = 0
+		for i in range(first_new_point, freeline_path.size()):
+			_draw_freeline_point(freeline_path[i], props)
+
+func _finish_freeline(pos: Vector2, props: Dictionary) -> void:
+	_update_freeline(pos, props)
+	freeline_active = false
+
+	var added_paintballs: Array = []
+	# Taper and shuffle depend on the entire stroke.
+	if props.tapered or props.get("shuffle", false):
+		_clear_freeline_preview()
+		_reset_freeline_brush(props)
+		added_paintballs = _commit_styled_freeline(props)
+	else:
+		for mark in _freeline_preview:
+			if not is_instance_valid(mark.node) or mark.node.is_queued_for_deletion():
+				continue
+			if mark.node.get_parent() == pet_node.ball_map.get(mark.data.base_ball_no):
+				mark.node.get_node("Area").input_ray_pickable = true
+				pet_node.queue_paintball(mark.data, mark.node)
+				if mark.record_in_history:
+					added_paintballs.append(mark.data)
+			else:
+				mark.node.hide()
+				mark.node.queue_free()
+		_freeline_preview.clear()
+	_record_paint_action(added_paintballs)
+
+	freeline_path.clear()
+	_freeline_samples.clear()
+
+func _finish_deferred_freeline(pos: Vector2, props: Dictionary) -> void:
+	freeline_active = false
+	if _freeline_is_straight(props) and not freeline_path.empty():
+		var start: Vector2 = freeline_path.front()
+		var end: Vector2 = _get_straight_freeline_end(pos)
+		var steps: int = max(1, round(start.distance_to(end) / max(1.0, props.spacing)))
+		freeline_path.clear()
+		for i in range(steps + 1):
+			freeline_path.append(start.linear_interpolate(end, float(i) / steps))
+	_finalize_freeline(pos)
+	freeline_path.clear()
 
 func _finalize_freeline(end_position = null) -> void:
 	# var _perf_start_time: int = OS.get_ticks_msec()
@@ -3541,6 +3652,65 @@ func _finalize_freeline(end_position = null) -> void:
 	# 	_perf_orphans
 	# ])
 
+func _get_freeline_sample(point: Vector2, props: Dictionary) -> Dictionary:
+	var jitter: float = props.jitter
+	var offset := Vector2(rand_range(-jitter, jitter), rand_range(-jitter, jitter))
+	var screen_pos: Vector2 = _get_viewport_pos_from_screen_pos(point + offset)
+	var target: Spatial = null
+	if is_instance_valid(paintball_target_ball):
+		target = paintball_target_ball
+	elif props.target_mode == 1 and is_instance_valid(active_selected_ball):
+		target = active_selected_ball
+	else:
+		target = get_intended_ball(screen_pos)
+	return {"pos": screen_pos, "ball": target}
+
+func _draw_freeline_point(point: Vector2, props: Dictionary) -> void:
+	var sample: Dictionary = _get_freeline_sample(point, props)
+	_freeline_samples.append(sample)
+	if sample.ball:
+		_create_paintball_at_position(sample.pos, sample.ball, -1, true)
+
+func _commit_styled_freeline(props: Dictionary) -> Array:
+	var stroke: Array = []
+	var path_len: int = _freeline_samples.size()
+	for i in range(path_len):
+		var sample: Dictionary = _freeline_samples[i]
+		if not is_instance_valid(sample.ball):
+			continue
+
+		var diameter: float = -1
+		if props.tapered:
+			diameter = props.diameter_min
+			if path_len > 1:
+				var t: float = float(i) / (path_len - 1)
+				var taper: float = 1.0 - abs(t * 2.0 - 1.0)
+				diameter = round(lerp(props.diameter_min, props.diameter_max, taper))
+
+		sample["diam"] = diameter
+		stroke.append(sample)
+
+	if props.get("shuffle", false):
+		stroke.shuffle()
+
+	var added_paintballs: Array = []
+	for sample in stroke:
+		var result = _create_paintball_at_position(sample.pos, sample.ball, sample.diam)
+		if result:
+			added_paintballs.append(result)
+	return added_paintballs
+
+func _validate_paint_colors(props: Dictionary) -> bool:
+	if paintball_settings_instance.is_design_mode_active():
+		return true
+	if LnzLiveUtils.parse_number_list(props.color).empty():
+		_show_paint_color_warning("Color", props.color)
+		return false
+	if LnzLiveUtils.parse_number_list(props.outline_color, true).empty():
+		_show_paint_color_warning("Outline Color", props.outline_color)
+		return false
+	return true
+
 func _show_paint_color_warning(field: String, value: String) -> void:
 	var message: String = "Enter a palette index for %s, such as 1." % field
 	if not value.strip_edges().empty():
@@ -3548,7 +3718,15 @@ func _show_paint_color_warning(field: String, value: String) -> void:
 	print("[WARNING] Paintball Mode: " + message)
 	console_log.log_warning(message)
 
-func _create_paintball_at_position(screen_pos: Vector2, target_ball: Spatial, diameter_override: float = -1):
+func _add_brush_paintball(data: Dictionary, preview: bool, record_in_history: bool = true) -> void:
+	if preview:
+		var node: Spatial = pet_node.create_pending_paintball_visual(data, _freeline_preview.size())
+		node.get_node("Area").input_ray_pickable = false
+		_freeline_preview.append({"data": data, "node": node, "record_in_history": record_in_history})
+	else:
+		pet_node.add_pending_paintball(data)
+
+func _create_paintball_at_position(screen_pos: Vector2, target_ball: Spatial, diameter_override: float = -1, preview: bool = false):
 	# var _perf_start_time: int = OS.get_ticks_msec()
 	# var _perf_dyn_start: int = OS.get_dynamic_memory_usage()
 	# var _perf_stat_start: int = OS.get_static_memory_usage()
@@ -3637,7 +3815,7 @@ func _create_paintball_at_position(screen_pos: Vector2, target_ball: Spatial, di
 					"relative_pos_lnz": relative_pos_lnz
 				}
 
-				pet_node.add_pending_paintball(pb_data)
+				_add_brush_paintball(pb_data, preview, false)
 			
 			print("[STATUS] PetViewContainer: successfully created %d paintballs from design onto ball #%d" % [count, target_ball.ball_no])
 			
@@ -3750,7 +3928,7 @@ func _create_paintball_at_position(screen_pos: Vector2, target_ball: Spatial, di
 			"anchored": props.anchored,
 		}
 
-		pet_node.add_pending_paintball(paintball_info)
+		_add_brush_paintball(paintball_info, preview)
 		print("[STATUS] PetViewContainer: successfully created paintball on ball #%d" % target_ball.ball_no)
 		
 		# var _perf_dyn_end: int = OS.get_dynamic_memory_usage()

@@ -2531,7 +2531,11 @@ func _setup_paintball_node(pb_visual_ball, pb_data, base_ball_node, pb_pos, pb_d
 	return pb_visual_ball
 
 func add_pending_paintball(paintball_info):
-	_pending_paintballs_data.append(paintball_info)
+	var node = create_pending_paintball_visual(paintball_info)
+	queue_paintball(paintball_info, node)
+	print("[STATUS] Node: add_pending_paintball: successfully added visual paintball to base ball %d" % paintball_info.base_ball_no)
+
+func create_pending_paintball_visual(paintball_info: Dictionary, preview_offset: int = 0) -> Spatial:
 	var base_ball_node = ball_map[paintball_info.base_ball_no]
 	var pb_visual_ball = _create_paintball_instance(base_ball_node)
 	
@@ -2544,10 +2548,12 @@ func add_pending_paintball(paintball_info):
 	_setup_paintball_node(pb_visual_ball, pb_data, base_ball_node, 
 						paintball_info.relative_pos_local, paintball_info.diameter,
 						paintball_map.get(paintball_info.base_ball_no, []).size(),
-						_pending_paintballs_data.size())
-	
-	_pending_paintball_nodes.append(pb_visual_ball)
-	print("[STATUS] Node: add_pending_paintball: successfully added visual paintball to base ball %d" % paintball_info.base_ball_no)
+						_pending_paintballs_data.size() + preview_offset + 1)
+	return pb_visual_ball
+
+func queue_paintball(paintball_info: Dictionary, node: Spatial) -> void:
+	_pending_paintballs_data.append(paintball_info)
+	_pending_paintball_nodes.append(node)
 
 func remove_last_pending_paintball():
 	print("[STATUS] Node: remove_last_pending_paintball: request received")

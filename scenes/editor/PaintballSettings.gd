@@ -40,6 +40,7 @@ onready var _group: SpinBox = find_node("Group")
 onready var _anchored: CheckBox = find_node("Anchored")
 onready var _target: OptionButton = find_node("Target")
 onready var _freeline_checkbox: CheckBox = find_node("FreelineCheckBox")
+onready var _live_freeline_checkbox: CheckBox = find_node("LiveFreelineCheckBox")
 onready var _straight_line_checkbox: CheckBox = find_node("StraightLineCheckBox")
 onready var _spacing: SpinBox = find_node("Spacing")
 onready var _jitter: SpinBox = find_node("Jitter")
@@ -516,6 +517,9 @@ func get_color_from_index(index: int) -> Color:
 func is_design_mode_active() -> bool:
 	return _tab_container.current_tab == 1
 
+func is_live_freeline_enabled() -> bool:
+	return _live_freeline_checkbox.pressed
+
 func get_properties() -> Dictionary:
 	var properties: Dictionary = {}
 	properties["diameter_min"] = _diameter_min.value
@@ -801,6 +805,7 @@ func _connect_settings_signals() -> void:
 	_anchored.connect("toggled", self, "_on_setting_changed")
 	_target.connect("item_selected", self, "_on_setting_changed")
 	_freeline_checkbox.connect("toggled", self, "_on_setting_changed")
+	_live_freeline_checkbox.connect("toggled", self, "_on_setting_changed")
 	_straight_line_checkbox.connect("toggled", self, "_on_setting_changed")
 	_spacing.connect("value_changed", self, "_on_setting_changed")
 	_jitter.connect("value_changed", self, "_on_setting_changed")
@@ -1305,6 +1310,7 @@ func save_settings() -> void:
 	config.set_value("PaintballProperties", "anchored", _anchored.pressed)
 	config.set_value("PaintballProperties", "target", _target.selected)
 	config.set_value("PaintballProperties", "freeline", _freeline_checkbox.pressed)
+	config.set_value("PaintballProperties", "live_freeline", _live_freeline_checkbox.pressed)
 	config.set_value("PaintballProperties", "straight_line", _straight_line_checkbox.pressed)
 	config.set_value("PaintballProperties", "spacing", _spacing.value)
 	config.set_value("PaintballProperties", "jitter", _jitter.value)
@@ -1363,6 +1369,7 @@ func load_settings() -> void:
 	_anchored.pressed = config.get_value("PaintballProperties", "anchored", true)
 	_target.selected = config.get_value("PaintballProperties", "target", 0)
 	_freeline_checkbox.pressed = config.get_value("PaintballProperties", "freeline", false)
+	_live_freeline_checkbox.pressed = config.get_value("PaintballProperties", "live_freeline", true)
 	_straight_line_checkbox.pressed = config.get_value("PaintballProperties", "straight_line", false)
 	_spacing.value = config.get_value("PaintballProperties", "spacing", 5.0)
 	_jitter.value = config.get_value("PaintballProperties", "jitter", 0.0)
@@ -1439,6 +1446,7 @@ func _on_reset_defaults_pressed() -> void:
 	_anchored.pressed = true
 	_target.selected = 0
 	_freeline_checkbox.pressed = false
+	_live_freeline_checkbox.pressed = true
 	_straight_line_checkbox.pressed = false
 	_spacing.value = 5.0
 	_jitter.value = 0.0

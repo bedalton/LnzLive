@@ -575,6 +575,12 @@ hint_tooltip = "Constrain stroke to a straight line. Hold X or Y to lock axis."
 custom_fonts/font = SubResource( 3 )
 text = "Straight Line"
 
+[node name="LiveFreelineCheckBox" type="CheckBox" parent="VBoxContainer/ScrollContainer/VBoxContainer/TabContainer/Standard/FreelineContainer"]
+custom_fonts/font = SubResource( 3 )
+pressed = true
+text = "Live Freeline preview"
+hint_tooltip = "Show paintballz while dragging a Freeline stroke"
+
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/ScrollContainer/VBoxContainer/TabContainer/Standard/FreelineContainer"]
 margin_top = 33.0
 margin_right = 460.0

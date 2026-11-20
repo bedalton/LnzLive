@@ -108,6 +108,8 @@ var is_resizing: bool = false
 var original_lnz_size: int = 0
 var original_scale: float = 1.0
 var drag_start_pos: Vector2 = Vector2()
+var _orbit_drag_origin = null
+var _orbit_drag_allowed: bool = false
 
 var _scale_group_pivot: Vector3 = Vector3.ZERO
 var _scale_group_initial_data: Dictionary = {}
@@ -1546,9 +1548,34 @@ func _zoom_view(factor: float) -> void:
 	var target_zoom: float = clamp(current_zoom * factor, 0.01, 100.0)
 	tex.rect_scale *= target_zoom / current_zoom
 
+func _viewport_has_model_pixel(viewport: Viewport, pos: Vector2) -> bool:
+	if not viewport.get_visible_rect().has_point(pos):
+		return false
+	var image: Image = viewport.get_texture().get_data()
+	if image == null or image.is_empty():
+		return false
+	var y: int = int(pos.y)
+	if not viewport.render_target_v_flip:
+		y = image.get_height() - 1 - y
+	image.lock()
+	var occupied: bool = image.get_pixel(int(pos.x), y).a > 0.0
+	image.unlock()
+	return occupied
+
+func _can_orbit_from(pos: Vector2) -> bool:
+	# The transparent pet view includes shader-drawn linez and polygons, which have no colliders.
+	var viewport_pos: Vector2 = _get_viewport_pos_from_screen_pos(pos)
+	if _viewport_has_model_pixel(camera.get_viewport(), viewport_pos):
+		return false
+	return not is_instance_valid(_overlay_viewport) or not _viewport_has_model_pixel(_overlay_viewport, viewport_pos)
+
 func _gui_input(event: InputEvent) -> void:
 	if input_is_paused:
 		return
+
+	if event is InputEventMouseButton and event.button_index == BUTTON_LEFT:
+		_orbit_drag_origin = event.position if event.pressed else null
+		_orbit_drag_allowed = false
 
 	if event is InputEventMouseButton and event.button_index == BUTTON_LEFT and event.pressed:
 		var focus_owner = get_focus_owner()
@@ -1774,10 +1801,14 @@ func _gui_input(event: InputEvent) -> void:
 			camera.transform.origin.y -= motion.y * 0.001 / tex.rect_scale.x
 			camera.transform.origin.x += motion.x * 0.001 / tex.rect_scale.x
 		elif Input.is_mouse_button_pressed(BUTTON_LEFT):
-			var motion: Vector2 = event.relative
-			camera_holder.rotation.x += motion.y * 0.01
-			# The viewport is mirrored horizontally, so yaw follows positive mouse motion.
-			camera_holder.rotation.y += motion.x * 0.01
+			if _orbit_drag_origin != null:
+				_orbit_drag_allowed = _can_orbit_from(_orbit_drag_origin)
+				_orbit_drag_origin = null
+			if _orbit_drag_allowed:
+				var motion: Vector2 = event.relative
+				camera_holder.rotation.x += motion.y * 0.01
+				# The viewport is mirrored horizontally, so yaw follows positive mouse motion.
+				camera_holder.rotation.y += motion.x * 0.01
 
 		# Highlight hovered ball in line creation mode:
 		if linez_mode and not selecting_on:

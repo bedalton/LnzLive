@@ -3111,8 +3111,6 @@ func _restore_move_snapshot(snapshot: Dictionary) -> void:
 	move_mode_settings_instance.set_queued_count(pending_moves.size())
 
 func _cap_history_arrays() -> void:
-	if paint_history.size() > MAX_INTERACTION_HISTORY:
-		paint_history.pop_front()
 	if move_history.size() > MAX_INTERACTION_HISTORY:
 		move_history.pop_front()
 
@@ -3136,7 +3134,6 @@ func _record_paint_action(paintballs_added: Array) -> void:
 	print("[STATUS] PetViewContainer: Recording paint action with %d paintballs" % paintballs_added.size())
 	paint_history.append(paintballs_added)
 	paint_redo_stack.clear()
-	_cap_history_arrays()
 
 func _undo_queued_paintball() -> void:
 	print("[STATUS] PetViewContainer: Undoing queued paintball action")

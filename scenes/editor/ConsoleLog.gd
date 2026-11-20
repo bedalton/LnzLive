@@ -7,6 +7,7 @@ export var display_time: float = 3.0
 export var fade_speed: float = 1.5
 
 var current_messages: Array = []
+var _hint: String = ""
 
 func _ready() -> void:
 	bbcode_enabled = true
@@ -22,6 +23,17 @@ func log_warning(msg: String) -> void:
 			current_messages.remove(i)
 			break
 	_add_message(msg, true)
+
+func show_hint(msg: String) -> void:
+	_hint = msg
+	_update_display()
+
+func clear_hint() -> bool:
+	if _hint.empty():
+		return false
+	_hint = ""
+	_update_display()
+	return true
 
 func _add_message(msg: String, warning: bool) -> void:
 	var entry: Dictionary = {
@@ -63,7 +75,9 @@ func _process(delta: float) -> void:
 
 func _update_display() -> void:
 	clear()
-	# Keep warnings visible when status messages fill the log.
+	# Keep warnings and shortcut hints visible when status messages fill the log.
+	if not _hint.empty():
+		_append_message({"text": _hint, "alpha": 1.0}, Color.white)
 	for msg in current_messages:
 		if msg["warning"]:
 			_append_message(msg, Color(1.0, 0.75, 0.35))

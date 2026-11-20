@@ -226,6 +226,7 @@ const MAX_INTERACTION_HISTORY: int = 25
 
 var paint_history: Array = []
 var paint_redo_stack: Array = []
+var _queued_history_hints_shown: Array = []
 
 var move_history: Array = []
 var move_redo_stack: Array = []
@@ -2229,6 +2230,12 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_FOCUS_OUT and freeline_active:
 		_cancel_freeline()
 
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and not event.button_index in [
+		BUTTON_WHEEL_UP, BUTTON_WHEEL_DOWN, BUTTON_WHEEL_LEFT, BUTTON_WHEEL_RIGHT
+	]:
+		console_log.clear_hint()
+
 func _unhandled_key_input(event: InputEventKey) -> void:
 	if event.is_pressed() and event.scancode == KEY_ESCAPE:
 		_exit_all_modes()
@@ -2264,19 +2271,23 @@ func _unhandled_key_input(event: InputEventKey) -> void:
 	if event is InputEventKey and event.pressed and LnzLiveUtils.shortcut_modifier(event) and event.shift:
 		if event.scancode == KEY_Z and not (OS.get_name() == "OSX" and event.command):  # Undo
 			if paintball_mode:
+				console_log.clear_hint()
 				_undo_queued_paintball()
 				get_tree().set_input_as_handled()
 				return
 			elif move_mode:
+				console_log.clear_hint()
 				_undo_queued_move()
 				get_tree().set_input_as_handled()
 				return
 		elif event.scancode == KEY_X:  # Redo
 			if paintball_mode:
+				console_log.clear_hint()
 				_redo_queued_paintball()
 				get_tree().set_input_as_handled()
 				return
 			elif move_mode:
+				console_log.clear_hint()
 				_redo_queued_move()
 				get_tree().set_input_as_handled()
 				return
@@ -3132,6 +3143,22 @@ func _redo_queued_paintball() -> void:
 
 	for pb_data in action_to_redo:
 		pet_node.add_pending_paintball(pb_data)
+
+func show_queued_history_shortcut_hint(event: InputEventKey) -> bool:
+	console_log.clear_hint()
+	if input_is_paused or current_mode in _queued_history_hints_shown:
+		return false
+	if not (paintball_mode or move_mode):
+		return false
+
+	var mode_name: String = "Paintball" if paintball_mode else "Move"
+	var message: String = "%s queue: Ctrl+Shift+Z to undo, Ctrl+Shift+X to redo." % mode_name
+	if paintball_mode:
+		var undo_key: String = "Cmd+Z" if OS.get_name() == "OSX" and event.command else "Ctrl+Z"
+		message += "\nPress %s again to undo the last LNZ edit." % undo_key
+	console_log.show_hint(message)
+	_queued_history_hints_shown.append(current_mode)
+	return paintball_mode
 
 func _record_move_start_state() -> void:
 	var t_start: int = OS.get_ticks_msec()

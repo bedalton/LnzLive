@@ -642,7 +642,8 @@ func _unhandled_key_input(event):
 	if event.scancode == KEY_S:
 		save_file(false)
 	elif event.scancode == KEY_Z and not event.shift:
-		undo_visual_edit()
+		if not pet_view.show_queued_history_shortcut_hint(event):
+			undo_visual_edit()
 	elif (event.scancode == KEY_Y and not event.shift) or (
 		event.scancode == KEY_Z and event.shift and OS.get_name() == "OSX" and event.command
 	):

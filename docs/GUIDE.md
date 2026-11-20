@@ -95,7 +95,7 @@ On macOS, Command can replace Ctrl for shortcuts and tool modifiers. Use Cmd+Z t
 
 ### History System
 
-LnzLive uses a Undo/Redo history system to track visual and text edits as saved actions (default: 25 saved actions). It uses "Logical Commits" for specific line changes (like moving a ball) and "Snapshots" for major operations. Use `CTRL` + `Z` to undo and `CTRL` + `Y` while focused to redo while the viewport is focused. There are "mini" history systems for Paintball Mode and Move Mode in which using `CTRL` + `SHIFT` + `Z` undoes and `CTRL` + `SHIFT` + `X` redoes any queued (but not yet applied) changes. Queued paintball edits have no undo limit.
+LnzLive uses a Undo/Redo history system to track visual and text edits as saved actions (default: 25 saved actions). It uses "Logical Commits" for specific line changes (like moving a ball) and "Snapshots" for major operations. Use `CTRL` + `Z` to undo and `CTRL` + `Y` while focused to redo while the viewport is focused. There are "mini" history systems for Paintball Mode and Move Mode in which using `CTRL` + `SHIFT` + `Z` undoes and `CTRL` + `SHIFT` + `X` redoes any queued (but not yet applied) changes. Queued paintball edits have no undo limit. The first document undo shortcut in each mode per app session shows a reminder of the queued history shortcuts. In Paintball Mode, press Ctrl+Z or Cmd+Z again to undo the last LNZ edit. A mouse click or a queued undo or redo shortcut also dismisses the reminder.
 
 ### User Config
 

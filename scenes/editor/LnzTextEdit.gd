@@ -737,6 +737,8 @@ func _on_LnzTextEdit_gui_input(event):
 		if event.button_index == BUTTON_LEFT:
 			filter_panel.call_deferred("capture_expansion")
 	if event is InputEventKey and event.pressed:
+		if filter_panel.active and event.scancode == KEY_BACKSPACE:
+			filter_panel.restore_gap_before_caret()
 		if event.scancode == KEY_PAGEDOWN:
 			var next = _get_next_section_line_idx(cursor_get_line() + 1)
 			if next != -1:

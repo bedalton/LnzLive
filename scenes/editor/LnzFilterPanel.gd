@@ -181,6 +181,13 @@ func caret_changed():
 	if _pending_edit_line != -1 and caret != _pending_edit_line:
 		_refresh()
 
+func restore_gap_before_caret():
+	# TextEdit unfolds the preceding gap before deleting a character.
+	var line = editor.cursor_get_line() - 1
+	while _hidden.has(line) and not editor.is_line_hidden(line):
+		editor.set_line_as_hidden(line, true)
+		line -= 1
+
 func capture_expansion():
 	if not active:
 		return

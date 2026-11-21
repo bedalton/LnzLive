@@ -1796,6 +1796,60 @@ func test_lnz_delimiter_detection_auto_priority():
 	var delim_3 = lnz_text._detect_delimiter(1, 3, true)
 	assert_eq(delim_3, ", ", "Tie between ', ' and ',' should favor ', ' due to priority.")
 	
+func test_filtered_edits_keep_the_viewport_stable():
+	var panel = lnz_text.filter_panel
+	var rows = PoolStringArray(["[Project Ball]"])
+	var visible_rows = max(lnz_text.get_visible_rows(), 4)
+	var edit_line = visible_rows * 4
+	for line in range(1, visible_rows * 8):
+		var in_gap = line == 2 or (line >= edit_line - visible_rows and line < edit_line)
+		rows.append("2 0 0 0" if in_gap else "1 0 0 0")
+	lnz_text.text = rows.join("\n")
+	panel.fields[0].text = "1"
+	panel._apply()
+	yield(get_tree(), "idle_frame")
+	yield(get_tree(), "idle_frame")
+
+	lnz_text.cursor_set_line(edit_line)
+	lnz_text.cursor_set_column(7)
+	lnz_text.center_viewport_to_cursor()
+	var scroll = lnz_text.get_v_scroll()
+	var top = Vector2(0, ceil(lnz_text.get_stylebox("normal").get_margin(MARGIN_TOP)))
+	var top_line = lnz_text.get_line_column_at_pos(top).y
+	assert_gt(scroll, 0.0, "The fixture should be scrolled into the document.")
+	for code in [KEY_A, KEY_BACKSPACE]:
+		var event = InputEventKey.new()
+		event.scancode = code
+		event.unicode = 97 if code == KEY_A else 0
+		event.pressed = true
+		get_tree().input_event(event)
+		yield(get_tree(), "idle_frame")
+		assert_eq(lnz_text.get_line(edit_line), "1 0 0 0a" if code == KEY_A else "1 0 0 0")
+		assert_eq(lnz_text.get_v_scroll(), scroll)
+		assert_eq(lnz_text.get_line_column_at_pos(top).y, top_line)
+		assert_true(lnz_text.is_line_hidden(edit_line - 1))
+
+	panel.fields[0].text = "1-2"
+	panel._apply()
+	yield(get_tree(), "idle_frame")
+	assert_eq(lnz_text.get_v_scroll(), scroll + 1.0)
+	assert_eq(lnz_text.get_line_column_at_pos(top).y, top_line)
+	panel.fields[0].text = "1"
+	panel._apply()
+	yield(get_tree(), "idle_frame")
+	assert_eq(lnz_text.get_v_scroll(), scroll)
+	assert_eq(lnz_text.get_line_column_at_pos(top).y, top_line)
+
+	lnz_text.cursor_set_line(lnz_text.get_line_count() - 1)
+	lnz_text.set_v_scroll(lnz_text.get_line_count())
+	top_line = lnz_text.get_line_column_at_pos(top).y
+	panel.fields[0].text = "1-2"
+	panel._apply()
+	yield(get_tree(), "idle_frame")
+	yield(get_tree(), "idle_frame")
+	assert_eq(lnz_text.get_line_column_at_pos(top).y, top_line)
+	panel.clear()
+
 func test_lnz_undo_restores_cursor_and_scroll():
 	# Verify that undoing a visual edit restores the text content, 
 	# cursor position, and scroll position to their pre-edit state.

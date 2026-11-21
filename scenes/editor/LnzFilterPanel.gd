@@ -22,6 +22,9 @@ var _pin_edit: bool = false
 var _force_refresh: bool = false
 var _pending_edit_line: int = -1
 var _drag_selection: bool = false
+var _backspace_scroll: float = -1.0
+var _pending_scroll: float = -1.0
+var _clamped_scroll: float = 0.0
 
 func _ready():
 	get_node("../HBoxContainer/FilterButton").connect("pressed", self, "_toggle")
@@ -89,6 +92,8 @@ func clear():
 	_pin_edit = false
 	_force_refresh = false
 	_pending_edit_line = -1
+	_backspace_scroll = -1.0
+	_pending_scroll = -1.0
 	for field in fields:
 		field.clear()
 	inherited_values.pressed = false
@@ -185,12 +190,23 @@ func caret_changed():
 	if _pending_edit_line != -1 and caret != _pending_edit_line:
 		_refresh()
 
+func prepare_backspace():
+	_backspace_scroll = editor.get_v_scroll()
+
 func restore_gap_before_caret():
-	# TextEdit unfolds the preceding gap before deleting a character.
+	# TextEdit unfolds the preceding gap before deleting a character and can
+	# scroll to keep the caret visible in that temporarily expanded view.
+	var scroll = _backspace_scroll
+	_backspace_scroll = -1.0
 	var line = editor.cursor_get_line() - 1
+	if not _hidden.has(line) or editor.is_line_hidden(line):
+		return
 	while _hidden.has(line) and not editor.is_line_hidden(line):
 		editor.set_line_as_hidden(line, true)
 		line -= 1
+	if scroll >= 0.0:
+		_set_filtered_scroll(scroll)
+		editor.cursor_set_column(editor.cursor_get_column())
 
 func capture_expansion():
 	if not active:
@@ -202,8 +218,14 @@ func capture_expansion():
 	_update_visibility()
 
 func _update_visibility():
+	_pending_scroll = -1.0
 	var caret = editor.cursor_get_line()
 	var nearest = 0
+	var scroll = editor.get_v_scroll()
+	var top_margin = editor.get_stylebox("normal").get_margin(MARGIN_TOP)
+	var top_line = int(editor.get_line_column_at_pos(Vector2(0, ceil(top_margin))).y)
+	var rows_above_top = 0
+	var visibility_changed = false
 	_hidden.clear()
 	for line in range(editor.get_line_count()):
 		var content = editor.get_line(line).strip_edges()
@@ -216,7 +238,43 @@ func _update_visibility():
 		elif abs(line - caret) < abs(nearest - caret):
 			nearest = line
 		if editor.is_line_hidden(line) != hidden:
+			visibility_changed = true
+			if line < top_line:
+				var rows = 1 + editor.get_line_wrap_count(line)
+				rows_above_top += -rows if hidden else rows
 			editor.set_line_as_hidden(line, hidden)
 	if _hidden.has(caret):
 		editor.cursor_set_line(nearest)
 		editor.center_viewport_to_cursor()
+	elif visibility_changed:
+		var target_scroll = scroll + rows_above_top
+		if _hidden.has(top_line):
+			# A hidden top line has no wrapped rows left to anchor.
+			target_scroll = _visible_rows_before(top_line) + fposmod(scroll, 1.0)
+		target_scroll = clamp(target_scroll, 0.0, max(0, editor.get_total_visible_rows() - editor.get_visible_rows()))
+		_set_filtered_scroll(target_scroll)
+		if target_scroll > editor.get_v_scroll():
+			# Newly revealed rows extend the scrollbar range on the next draw.
+			_pending_scroll = target_scroll
+			_clamped_scroll = editor.get_v_scroll()
+			if not editor.is_connected("draw", self, "_restore_scroll_after_draw"):
+				editor.connect("draw", self, "_restore_scroll_after_draw", [], CONNECT_ONESHOT | CONNECT_DEFERRED)
+
+func _visible_rows_before(line: int) -> int:
+	var rows = 0
+	for index in range(line):
+		if not editor.is_line_hidden(index):
+			rows += 1 + editor.get_line_wrap_count(index)
+	return rows
+
+func _set_filtered_scroll(scroll: float):
+	editor.set_v_scroll(scroll)
+	# Godot 3 only remaps the first visible line on a scrollbar value change.
+	# Hiding rows can change that mapping even when the value stays the same.
+	editor._scroll_moved(editor.get_v_scroll())
+
+func _restore_scroll_after_draw():
+	var scroll = _pending_scroll
+	_pending_scroll = -1.0
+	if active and scroll >= 0.0 and is_equal_approx(editor.get_v_scroll(), _clamped_scroll):
+		_set_filtered_scroll(scroll)

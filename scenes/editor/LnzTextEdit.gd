@@ -697,6 +697,8 @@ func _input(event):
 		get_tree().set_input_as_handled()
 		if clipboard_paste:
 			_paste_filtered_line()
+	elif key == KEY_BACKSPACE:
+		filter_panel.prepare_backspace()
 
 func _selection_spans_lines() -> bool:
 	return is_selection_active() and get_selection_from_line() != get_selection_to_line()
@@ -741,7 +743,9 @@ func _on_LnzTextEdit_gui_input(event):
 			else:
 				_skip_filtered_end_fold(event, text_left)
 	if event is InputEventKey and event.pressed:
-		if filter_panel.active and event.scancode == KEY_BACKSPACE:
+		if filter_panel.active and (event.scancode == KEY_BACKSPACE or (
+			OS.get_name() == "OSX" and event.scancode == KEY_H and event.control and not event.command
+		)):
 			filter_panel.restore_gap_before_caret()
 		if event.scancode == KEY_PAGEDOWN:
 			var next = _get_next_section_line_idx(cursor_get_line() + 1)

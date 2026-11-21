@@ -735,7 +735,11 @@ func _on_LnzTextEdit_gui_input(event):
 			accept_event()
 			return
 		if event.button_index == BUTTON_LEFT:
-			filter_panel.call_deferred("capture_expansion")
+			var text_left = int(get_stylebox("normal").get_margin(MARGIN_LEFT)) + get_total_gutter_width()
+			if event.position.x <= text_left - 3:
+				filter_panel.call_deferred("capture_expansion")
+			else:
+				_skip_filtered_end_fold(event, text_left)
 	if event is InputEventKey and event.pressed:
 		if filter_panel.active and event.scancode == KEY_BACKSPACE:
 			filter_panel.restore_gap_before_caret()
@@ -797,6 +801,18 @@ func _on_LnzTextEdit_gui_input(event):
 					var b_name = get_ball_name(fallback_no)
 					if b_name != "":
 						console_log.log_message("[HELPER] Ballz #%d (%s)" % [fallback_no, b_name])
+
+func _skip_filtered_end_fold(event: InputEventMouseButton, text_left: int):
+	var line = int(get_line_column_at_pos(event.position).y)
+	if not is_folded(line):
+		return
+	# Godot 3 treats filtered gaps as folds and checks for clicks around the
+	# end-of-line ellipsis before placing the caret. Move the click past that
+	# hit area so TextEdit still handles caret placement and selection.
+	var line_end = text_left + get_line_width(line) - scroll_horizontal
+	var fold_end = line_end + get_icon("GuiEllipsis", "EditorIcons").get_width() + 3
+	if event.position.x > line_end - 3 and event.position.x <= fold_end:
+		event.position.x = fold_end + 1
 
 func _get_user_preferred_delimiter() -> String:
 	var settings = get_tree().root.get_node_or_null("Root/SceneRoot")
